@@ -2,24 +2,26 @@
 precision mediump float;
 #endif
 
-#define CONTRAST 1.0
-#define EXPOSURE 0.01
-#define SATURATION 0.9
-#define GRAIN_AMOUNT 0.1
-#define COLOR_SEPARATION 0.01
-#define HALFTONE_SCALE 300.0
-#define POSTERIZE_LEVELS 1.04
-#define ANALOG_FADE 0.4
-#define COLOR_SHIFT 0.75
-#define FEEDBACK_DECAY 0.95
-
-uniform float time;
-uniform vec2 resolution;
 uniform sampler2D tex0;
 uniform sampler2D tex1;
-uniform float mixAmount;
 uniform sampler2D feedback;
+uniform float mixAmount;
+uniform float time;
+uniform vec2 resolution;
 uniform float feedbackAmount;
+uniform float feedbackDecay;
+uniform float colorSeparation;
+uniform float grainAmount;
+uniform float halftoneScale;
+uniform float posterizeLevels;
+uniform float brightness;
+uniform float contrast;
+uniform float saturation;
+
+uniform float exposure;      // default: 0.01
+uniform float analogFade;      // default: 0.4
+uniform float colorShift;      // default: 0.75
+
 varying vec2 vTexCoord;
 
 float random(vec2 st) {
@@ -27,14 +29,14 @@ float random(vec2 st) {
 }
 
 float halftone(vec2 uv, float intensity) {
-    vec2 coord = uv * HALFTONE_SCALE;
+    vec2 coord = uv * halftoneScale;
     vec2 nearest = 2.0 * fract(coord) - 1.0;
     float dist = length(nearest);
     return step(dist, intensity * 1.5);
 }
 
 vec3 posterize(vec3 color) {
-    return floor(color * POSTERIZE_LEVELS) / POSTERIZE_LEVELS;
+    return floor(color * posterizeLevels) / posterizeLevels;
 }
 
 vec3 rgb2hsv(vec3 c) {
@@ -52,14 +54,61 @@ vec3 hsv2rgb(vec3 c) {
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+vec4 applyFeedback(vec2 uv) {
+    vec4 feedbackColor = texture2D(feedback, uv);
+    return feedbackColor * feedbackDecay;
+}
+
+vec4 applyColorSeparation(sampler2D tex, vec2 uv) {
+    vec2 rOffset = vec2(colorSeparation, 0.0);
+    vec2 gOffset = vec2(0.0, 0.0);
+    vec2 bOffset = vec2(-colorSeparation, 0.0);
+    
+    float r = texture2D(tex, uv + rOffset).r;
+    float g = texture2D(tex, uv + gOffset).g;
+    float b = texture2D(tex, uv + bOffset).b;
+    
+    return vec4(r, g, b, 1.0);
+}
+
+vec4 applyGrain(vec4 color, vec2 uv) {
+    float noise = random(uv + time) * grainAmount;
+    return color + vec4(noise);
+}
+
+vec4 applyHalftone(vec4 color, vec2 uv) {
+    vec2 center = fract(uv * halftoneScale);
+    float dist = length(center - 0.5);
+    float pattern = smoothstep(0.4, 0.5, dist);
+    return mix(color, vec4(pattern), 0.2);
+}
+
+vec4 applyPosterize(vec4 color) {
+    return floor(color * posterizeLevels) / posterizeLevels;
+}
+
+vec4 adjustColors(vec4 color) {
+    // Brightness
+    color.rgb *= brightness;
+    
+    // Contrast
+    color.rgb = (color.rgb - 0.5) * contrast + 0.5;
+    
+    // Saturation
+    float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+    color.rgb = mix(vec3(luminance), color.rgb, saturation);
+    
+    return color;
+}
+
 void main() {
     vec2 uv = vTexCoord;
     uv.y = 1.0 - uv.y;
     
     // Get feedback from previous frame with decay
-    vec4 feedbackColor = texture2D(feedback, uv) * FEEDBACK_DECAY;
+    vec4 feedbackColor = applyFeedback(uv);
     
-    vec2 redOffset = vec2(COLOR_SEPARATION * sin(time), COLOR_SEPARATION * cos(time));
+    vec2 redOffset = vec2(colorSeparation * sin(time), colorSeparation * cos(time));
     vec2 blueOffset = -redOffset;
     
     // Sample both videos with color separation
@@ -77,20 +126,20 @@ void main() {
     vec3 colorSeparated = mix(colorSeparated1, colorSeparated2, mixAmount);
     
     vec3 hsv = rgb2hsv(colorSeparated);
-    hsv.y *= SATURATION;
-    hsv.y = mix(hsv.y, hsv.y * (1.0 - ANALOG_FADE), random(uv + time));
-    hsv.z = mix(hsv.z, hsv.z * (1.0 - ANALOG_FADE * 0.5), random(uv - time));
-    hsv.x += COLOR_SHIFT * random(uv * time);
+    hsv.y *= saturation;
+    hsv.y = mix(hsv.y, hsv.y * (1.0 - analogFade), random(uv + time));
+    hsv.z = mix(hsv.z, hsv.z * (1.0 - analogFade * 0.5), random(uv - time));
+    hsv.x += colorShift * random(uv * time);
     
     vec3 color = hsv2rgb(hsv);
-    color = (color - 0.5) * CONTRAST + 0.5 + EXPOSURE;
+    color = (color - 0.5) * contrast + 0.5 + exposure;
     
     vec2 grainUV = uv * resolution;
     vec3 grain = vec3(
         random(grainUV + vec2(time * 0.001)),
         random(grainUV + vec2(time * 0.002)),
         random(grainUV + vec2(time * 0.003))
-    ) * GRAIN_AMOUNT;
+    ) * grainAmount;
     color += grain;
     
     vec3 halftoneColor;
@@ -100,7 +149,7 @@ void main() {
     
     color = mix(color, halftoneColor, 0.5);
     color = posterize(color);
-    color = mix(color, color.gbr * 0.9, ANALOG_FADE * 0.2);
+    color = mix(color, color.gbr * 0.9, analogFade * 0.2);
     
     // Mix with feedback
     color = mix(color, feedbackColor.rgb, feedbackAmount);

@@ -15,6 +15,53 @@ let currentBuffer;
 let scribbles = [];
 let circles = [];
 
+// Shader parameters with original default values
+let params = {
+    contrast: 1.0,
+    exposure: 0.01,
+    saturation: 0.9,
+    grainAmount: 0.1,
+    colorSeparation: 0.01,
+    halftoneScale: 300.0,
+    posterizeLevels: 1.04,
+    analogFade: 0.4,
+    colorShift: 0.75,
+    feedbackDecay: 0.95,
+    feedbackAmount: 0.3
+};
+
+function setupGUI() {
+    let gui = new dat.GUI();
+    
+    // Feedback controls
+    let feedbackFolder = gui.addFolder('Feedback');
+    feedbackFolder.add(params, 'feedbackAmount', 0, 1).name('Amount');
+    feedbackFolder.add(params, 'feedbackDecay', 0.5, 0.99).name('Decay');
+    feedbackFolder.open();
+    
+    // Effects controls
+    let effectsFolder = gui.addFolder('Effects');
+    effectsFolder.add(params, 'colorSeparation', 0, 0.1).name('Color Split');
+    effectsFolder.add(params, 'grainAmount', 0, 0.5).name('Grain');
+    effectsFolder.add(params, 'halftoneScale', 100, 500).name('Halftone');
+    effectsFolder.add(params, 'posterizeLevels', 1, 5).name('Posterize');
+    effectsFolder.add(params, 'analogFade', 0, 1).name('Analog');
+    effectsFolder.add(params, 'colorShift', 0, 2).name('Color Shift');
+    effectsFolder.open();
+    
+    // Color controls
+    let colorFolder = gui.addFolder('Color');
+    colorFolder.add(params, 'contrast', 0, 2).name('Contrast');
+    colorFolder.add(params, 'exposure', 0, 0.1).name('Exposure');
+    colorFolder.add(params, 'saturation', 0, 2).name('Saturation');
+    colorFolder.open();
+    
+    // Position GUI
+    gui.domElement.style.position = 'absolute';
+    gui.domElement.style.top = '10px';
+    gui.domElement.style.right = '10px';
+}
+
 function preload() {
     mainShader = loadShader('shader.vert', 'shader.frag');
     
@@ -67,6 +114,9 @@ function setup() {
     for (let i = 0; i < 5; i++) {
         createNewScribble();
     }
+    
+    // Setup GUI controls
+    setupGUI();
 }
 
 function createNewScribble() {
@@ -248,10 +298,21 @@ function draw() {
         mainShader.setUniform('mixAmount', isTransitioning ? smoothstep(0, 1, transitionProgress) : 0.0);
     }
     
+    // Update shader parameters from GUI
     mainShader.setUniform('feedback', feedbackBuffer);
     mainShader.setUniform('time', frameCount * 0.01);
     mainShader.setUniform('resolution', [width, height]);
-    mainShader.setUniform('feedbackAmount', 0.3);
+    mainShader.setUniform('feedbackAmount', params.feedbackAmount);
+    mainShader.setUniform('feedbackDecay', params.feedbackDecay);
+    mainShader.setUniform('colorSeparation', params.colorSeparation);
+    mainShader.setUniform('grainAmount', params.grainAmount);
+    mainShader.setUniform('halftoneScale', params.halftoneScale);
+    mainShader.setUniform('posterizeLevels', params.posterizeLevels);
+    mainShader.setUniform('contrast', params.contrast);
+    mainShader.setUniform('exposure', params.exposure);
+    mainShader.setUniform('saturation', params.saturation);
+    mainShader.setUniform('analogFade', params.analogFade);
+    mainShader.setUniform('colorShift', params.colorShift);
     
     currentBuffer.rect(-width/2, -height/2, width, height);
     
