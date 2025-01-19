@@ -54,13 +54,14 @@ function setup() {
     // Create overlay graphics buffers
     for (let i = 0; i < 3; i++) {
         let g = createGraphics(width, height);
-        g.colorMode(HSB, 100);
+        g.colorMode(HSB);
         overlayGraphics.push(g);
     }
     
-    // Create scribble graphics buffer
+    // Create scribble graphics buffer with HSB color mode
     scribbleGraphics = createGraphics(width, height);
-    scribbleGraphics.colorMode(RGB, 255, 255, 255, 1);
+    scribbleGraphics.colorMode(HSB);
+    scribbleGraphics.blendMode(ADD);
     
     // Initialize scribble parameters
     for (let i = 0; i < 5; i++) {
@@ -70,9 +71,11 @@ function setup() {
 
 function createNewScribble() {
     scribbles.push({
+        x: random(width),
+        y: random(height),
         points: [],
-        color: color(random(255), random(255), random(255), 0.5),
-        life: random(100, 200),
+        hue: random(255),
+        life: 255,
         width: random(2, 5)
     });
 }
@@ -80,13 +83,21 @@ function createNewScribble() {
 function updateScribbles() {
     scribbleGraphics.clear();
     
+    // Add new scribbles occasionally
+    if (frameCount - lastScribbleTime > 60) {
+        createNewScribble();
+        lastScribbleTime = frameCount;
+    }
+    
+    // Update and draw all scribbles
     for (let i = scribbles.length - 1; i >= 0; i--) {
         let scribble = scribbles[i];
         
+        // Add new points using Perlin noise for smooth movement
         if (scribble.points.length < 100) {
             let lastPoint = scribble.points[scribble.points.length - 1] || {
-                x: random(width),
-                y: random(height)
+                x: scribble.x,
+                y: scribble.y
             };
             
             let angle = noise(lastPoint.x * 0.01, lastPoint.y * 0.01, frameCount * 0.01) * TWO_PI;
@@ -97,11 +108,12 @@ function updateScribbles() {
             scribble.points.push(newPoint);
         }
         
-        // Draw scribble
+        // Draw the scribble
         scribbleGraphics.push();
-        scribbleGraphics.stroke(scribble.color);
-        scribbleGraphics.strokeWeight(scribble.width);
         scribbleGraphics.noFill();
+        scribbleGraphics.strokeWeight(scribble.width);
+        scribbleGraphics.stroke(scribble.hue, 255, 255, scribble.life);
+        
         scribbleGraphics.beginShape();
         for (let point of scribble.points) {
             scribbleGraphics.vertex(point.x, point.y);
@@ -109,15 +121,11 @@ function updateScribbles() {
         scribbleGraphics.endShape();
         scribbleGraphics.pop();
         
-        scribble.life--;
+        // Update life and remove dead scribbles
+        scribble.life -= 1;
         if (scribble.life <= 0) {
             scribbles.splice(i, 1);
         }
-    }
-    
-    if (frameCount - lastScribbleTime > 60) {
-        createNewScribble();
-        lastScribbleTime = frameCount;
     }
 }
 
@@ -132,7 +140,7 @@ function updateOverlays() {
         let y = height/2 + sin(t * 1.5) * 150;
         
         // Draw gradient circles with blend modes
-        g.blendMode(SCREEN);
+        g.blendMode(BLEND);
         for (let r = 200; r > 0; r -= 20) {
             let hue = (frameCount * 0.5 + i * 30 + r) % 100;
             g.fill(hue, 80, 90, 0.1);
@@ -251,7 +259,7 @@ function draw() {
     image(currentBuffer, -width/2, -height/2, width, height);
     
     // Update and blend overlays
-    updateOverlays();
+    // updateOverlays();
     updateScribbles();
     
     // Draw overlays with blending
@@ -263,7 +271,7 @@ function draw() {
         image(g, 0, 0);
     });
     
-    // Draw scribbles on top
+    // Draw scribbles on top with ADD blending
     blendMode(OVERLAY);
     image(scribbleGraphics, 0, 0);
     pop();
