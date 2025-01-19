@@ -58,7 +58,7 @@ function setup() {
         overlayGraphics.push(g);
     }
     
-    // Create scribble graphics buffer with HSB color mode
+    // Create scribble graphics buffer
     scribbleGraphics = createGraphics(width, height);
     scribbleGraphics.colorMode(HSB);
     scribbleGraphics.blendMode(ADD);
@@ -243,7 +243,6 @@ function draw() {
     currentBuffer.shader(mainShader);
     
     if (videos.length) {
-        // Set video textures and transition uniforms
         mainShader.setUniform('tex0', videos[currentVideoIndex]);
         mainShader.setUniform('tex1', videos[nextVideoIndex]);
         mainShader.setUniform('mixAmount', isTransitioning ? smoothstep(0, 1, transitionProgress) : 0.0);
@@ -253,13 +252,13 @@ function draw() {
     mainShader.setUniform('time', frameCount * 0.01);
     mainShader.setUniform('resolution', [width, height]);
     mainShader.setUniform('feedbackAmount', 0.3);
+    
     currentBuffer.rect(-width/2, -height/2, width, height);
     
     // Draw current buffer to screen
     image(currentBuffer, -width/2, -height/2, width, height);
     
-    // Update and blend overlays
-    // updateOverlays();
+    // Update scribbles
     updateScribbles();
     
     // Draw overlays with blending
@@ -271,7 +270,7 @@ function draw() {
         image(g, 0, 0);
     });
     
-    // Draw scribbles on top with ADD blending
+    // Draw scribbles on top
     blendMode(OVERLAY);
     image(scribbleGraphics, 0, 0);
     pop();
@@ -294,9 +293,17 @@ function smoothstep(min, max, value) {
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
-    // Recreate graphics buffers
-    feedbackBuffer = createGraphics(width, height, WEBGL);
-    currentBuffer = createGraphics(width, height, WEBGL);
-    overlayGraphics = overlayGraphics.map(() => createGraphics(width, height));
-    scribbleGraphics = createGraphics(width, height);
+    
+    // Resize all graphics buffers
+    feedbackBuffer = createGraphics(windowWidth, windowHeight, WEBGL);
+    currentBuffer = createGraphics(windowWidth, windowHeight, WEBGL);
+    
+    overlayGraphics.forEach((g, i) => {
+        overlayGraphics[i] = createGraphics(windowWidth, windowHeight);
+        overlayGraphics[i].colorMode(HSB);
+    });
+    
+    scribbleGraphics = createGraphics(windowWidth, windowHeight);
+    scribbleGraphics.colorMode(HSB);
+    scribbleGraphics.blendMode(ADD);
 }
